@@ -1,26 +1,39 @@
 <?php
 if (empty($_SESSION['user'])) header('Location: ../../../index.php');
+print_r(printer_list(PRINTER_ENUM_LOCAL | PRINTER_ENUM_SHARED | PRINTER_ENUM_NAME));
 ?>
 
 <div class="easyui-layout" style="width:100%;height:100%" fit="true">
 	<div data-options="region:'north'" style="height:40px;padding:5px;">
-		<a href="#" class="easyui-linkbutton" data-options="iconCls:'icon-save', plain:true" id='btn_simpan' onclick="javascript:simpan()">Simpan</a>
-		<a id="btn_hapus" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-cancel', plain:true" >Hapus</a>
+	<a href="#" class="easyui-linkbutton" iconCls="icon-save" id='btn_simpan' onclick="javascript:simpan()">Simpan</a>
+		<a id="btn_tambah" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-add', plain:true">Tambah</a>
+		<a id="btn_ubah" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-edit', plain:true">Ubah / F4</a>
+		<a id="btn_hapus" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-cancel', plain:true">Hapus</a>
 		<a id="btn_refresh" href="#" class="easyui-linkbutton" data-options="iconCls:'icon-reload', plain:true">Refresh</a>
 		<div style="float:right" hidden>
 			<input class="easyui-searchbox" data-options="prompt:'Silahkan Ketikan Kata Kunci Pada Bagian Pencarian',menu:'#mm',searcher:do_search" style="width:300px"></input>
 			<div id="mm">
-				<div data-options="name:'alasan'">Printer</div>				
+				<div data-options="name:'alasan'">Modifier</div>				
 			</div>
 		</div>
 	</div>
-	<div data-options="region:'center'," >
+	<div data-options="region:'center',">
 		<!--<table id="table_data"></table>-->
-		<div id="form_input">
 		<input type="hidden" id="data_detail" name="data_detail">
-		</div>
-		<table id="table_data_detail" style="height:100%;width:100%;"></table>
+		<table id="table_data_detail" style="height:220px;width:100%;"></table>
 	</div>
+</div>
+
+<div id="dlg-buttons">
+	<table cellpadding="0" cellspacing="0" style="width:100%">
+		<tr>
+			<td align="left" id="label_form"><label style="font-weight:normal" id="label_form">User :</label> <label id="lbl_kasir"></label> <label style="font-weight:normal" id="label_form">| Tgl Input :</label> <label id="lbl_tanggal"></label></td>
+			<td style="text-align:right">
+				<a href="#" class="easyui-linkbutton" iconCls="icon-save" id='btn_simpan' onclick="javascript:simpan()">Simpan</a>
+				<a href="#" class="easyui-linkbutton" iconCls="icon-reload" onclick="javascript:tambah()">Reset</a>
+			</td>
+		</tr>
+	</table>
 </div>
 
 <script type="text/javascript" src="script/jquery-easyui/plugins/datagrid-filter.min.js"></script>
@@ -170,16 +183,19 @@ function ubah() {
 }
 
 function simpan() {
+	var isValid = $('#form_input').form('validate');
+	var act = $('[name=act]').val();
 	$('#data_detail').val(JSON.stringify($('#table_data_detail').datagrid('getRows')));
 	var datanya = $("#form_input :input").serialize();
-	isValid = cek_datagrid($('#table_data_detail'));
 	
-	if (isValid) {
+	if (isValid && !$('#JENISDEFAULT').is(':checked'))
+		isValid = cek_datagrid($('#table_data_detail'));
+	if (isValid && (act=='insert' || act=='edit')) {
 		$.ajax({
 			type: 'POST',
 			dataType: 'json',
 			url: "data/process/proses_master.php",
-			data: "table=simpan_printer&"+datanya,
+			data: "table=simpan_modifier&"+datanya,
 			cache: false,
 			beforeSend : function (){
 				$.messager.progress();
@@ -187,9 +203,18 @@ function simpan() {
 			success: function(msg){
 				$.messager.progress('close');
 				if (msg.success) {
-					$('#form_input').dialog('close');
-					$.messager.alert('Info','Simpan Sukses','info');
-					load_data_printer();
+					if (act=='insert') {
+						tambah();
+						$.messager.show({
+							title:'Info',
+							msg:'Simpan Sukses',
+							showType:'show'
+						});
+					} else {
+						$('#form_input').dialog('close');
+						$.messager.alert('Info','Ubah Sukses','info');
+					}
+					$('#table_data').datagrid('reload');
 				} else {
 					$.messager.alert('Error', msg.errorMsg, 'error');
 				}
@@ -199,7 +224,7 @@ function simpan() {
 }
 
 function hapus() {
-	var row = $('#table_data_detail').datagrid('getSelected');
+	var row = $('#table_data').datagrid('getSelected');
 	if (row){
 		$.messager.confirm('Confirm','Anda Yakin Menghapus Data Ini ?',function(r){
 			if (r){
@@ -217,46 +242,32 @@ function hapus() {
 }
 
 function buat_table_detail() {
-	
-	var tipe_printer = [{id:"THERMAL"},{id:"DOT MATRIK"}];
-
 	$("#table_data_detail").datagrid({
 		showFooter:true,
-		singleSelect:true,
 		rownumbers:true,
 		clickToEdit:false,
 		data:[],
 		frozenColumns:[[
-			{field:'KODE',title:'Kode Printer',width:75,hidden:true},
-			{field:'NAMA',title:'Nama',width:200, sortable:true,editor:{
+			{field:'KODE',title:'Kode Printer',width:75,editor:{
 				type:'combogrid',
 				options:{
 					panelWidth:550,
-					url: 'config/combogrid.php?table=nama_printer',
+					url: 'config/combogrid.php?table=printer',
 					mode: 'remote',
-					idField:'NAME',
-					textField:'NAME',
+					idField:'KODE',
+					textField:'KODE',
 					view:bufferview,
 					pageSize:10,
 					columns:[[
-						{field:'NAME',title:'Nama Printer',width:200, sortable:true},
-						{field:'DESCRIPTION',title:'Nama Komputer',width:200, sortable:true},
+						{field:'KODE',title:'Kode',width:100, sortable:true},
+						{field:'NAMA',title:'Nama',width:200, sortable:true},
 					]]
 				}
 			}},
+			{field:'NAMA',title:'Nama',width:200, sortable:true,},
 		]],
 		columns:[[
-			{field:'TIPEPRINTER',title:'Tipe Printer',width:200, sortable:true,
-				editor:{
-                    type:'combobox',
-                    options:{
-                        valueField:'id',
-                        textField:'id',
-                        data:tipe_printer,
-                        required:true
-                    }
-                }},
-			{field:'NAMAPRINTER',title:'Alias Printer',width:200, sortable:true,editor:{type:'text'}},
+			{field:'NAMAPRINTER',title:'Nama Printer',width:200, sortable:true,editor:{type:'text'}},
 			{field:'NAMAKOMPUTER',title:'Nama Komputer',width:200, sortable:true},
 			{field:'USERENTRY',title:'Penginput',width:120, sortable:true},
 			{field:'TANGGALENTRY',title:'Tgl. Input',width:110, sortable:true, formatter:ubah_tgl_indo, align:'center',},
@@ -268,36 +279,11 @@ function buat_table_detail() {
                         off: 0
 				}}}
 		]],
-		onClickRow:function(index,row){
+		onClickRow:function(){
 		},
 		onLoadSuccess : function (data){
 		},
 		onAfterDeleteRow:function(index, row){
-			var kode = row.KODE; 
-			$.ajax({
-				type: 'POST',
-				dataType: 'json',
-				url: "data/process/proses_master.php",
-				data: "table=cek_delete_printer&kode="+kode,
-				cache: false,
-				beforeSend : function (){
-					$.messager.progress();
-				},
-				success: function(msg){
-					$.messager.progress('close');
-					if (msg.success) {
-						
-					} else {
-						$.messager.alert('Error', msg.errorMsg, 'error');
-						
-						//cancel delete
-						$('#table_data_detail').datagrid('insertRow',{
-							index: index,	// index start with 0
-							row: row
-						});
-					}
-				}
-			});
 		},
 		onCellEdit:function(index,field,val){
 			var row = $(this).datagrid('getRows')[index];
@@ -310,16 +296,16 @@ function buat_table_detail() {
 			var ed = get_editor ('#table_data_detail', index, cell.field);
 			var row_update = {};
 			switch(cell.field) {
-				case 'NAMA':
+				case 'KODE':
 					var data = ed.combogrid('grid').datagrid('getSelected');
-					var namakomp = data ? data.DESCRIPTION : '';
+					var nama = data ? data.NAMA : '';
 					row_update = {
-						NAMAKOMPUTER:namakomp,
+						NAMAPRINTER:nama,
 						USERENTRY:"<?php echo $_SESSION['user'];?>",
 						TANGGALENTRY:"<?php echo date("Y-m-d");?>",
 						STATUS:1
 					};
-				break;
+					break;
 			}
 
 			if (jQuery.isEmptyObject(row_update) == false) {
